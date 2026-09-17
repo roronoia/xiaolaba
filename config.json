@@ -1,0 +1,14 @@
+{
+  "room_id": "classroom_703",
+  "secret_token": "123456",
+  "admin_password": "888888",
+  "pages_url": "",
+  "font_size_preset": "large",
+  "voice_index": 0,
+  "voice_rate": 0,
+  "voice_volume": 100,
+  "play_chime": true,
+  "dnd_mode": false,
+  "banner_duration": 10,
+  "auto_start": true
+}

@@ -1,0 +1,29 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+
+# PyInstaller / Build output
+build/
+dist/
+dist_release/
+*.manifest
+*.spec.bak
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Large binary release zips
+黑板小喇叭_绿色免安装版.zip
+黑板小喇叭_完整源码包.zip
+
+# Runtime temporary flags
+.authorized_exit
+
+# Local IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini

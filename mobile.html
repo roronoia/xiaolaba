@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>黑板小喇叭 · 移动呼叫台</title>
+    <script src="mqtt.min.js"></script>
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-hover: #0369a1;
+            --primary-light: #e0f2fe;
+            --bg: #f8fafc;
+            --card-bg: rgba(255, 255, 255, 0.96);
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --radius-lg: 18px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --shadow-card: 0 4px 16px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+            --shadow-btn: 0 4px 14px rgba(2, 132, 199, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #f1f5f9;
+            color: var(--text-main);
+            min-height: 100vh;
+            padding-bottom: 40px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 顶部科技蓝渐变微质感导航 */
+        .top-navbar {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
+            color: #ffffff;
+            padding: 18px 20px 24px;
+            border-bottom-left-radius: 26px;
+            border-bottom-right-radius: 26px;
+            box-shadow: 0 6px 20px rgba(3, 105, 161, 0.25);
+            position: relative;
+        }
+
+        .navbar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-icon {
+            font-size: 24px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+        }
+
+        .brand-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: all 0.3s;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+            transition: background 0.3s;
+        }
+
+        /* 顶部精简班级/口令快速栏 (可展开) */
+        .channel-bar {
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            padding: 8px 14px;
+            border-radius: 14px;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            transition: background 0.2s;
+        }
+
+        .channel-bar:active {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .channel-pill {
+            background: #ffffff;
+            color: #0284c7;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .token-tag {
+            font-size: 12px;
+            color: #e0f2fe;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .channel-edit-hint {
+            font-size: 12px;
+            color: #bae6fd;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        /* 展开的设置面板 */
+        .settings-drawer {
+            display: none;
+            margin-top: 12px;
+            background: #ffffff;
+            color: var(--text-main);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+            animation: slideDown 0.25s ease-out;
+        }
+
+        .settings-drawer.open {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .drawer-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .drawer-field {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .drawer-field label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            width: 80px;
+            white-space: nowrap;
+        }
+
+        .drawer-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #0f172a;
+            outline: none;
+        }
+
+        .drawer-input:focus {
+            border-color: var(--primary);
+        }
+
+        .drawer-btn-save {
+            margin-top: 6px;
+            width: 100%;
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 9px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* 核心内容容器 */
+        .main-container {
+            max-width: 480px;
+            margin: -14px auto 0;
+            padding: 0 16px;
+        }
+
+        /* 毛玻璃质感卡片 */
+        .glass-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: var(--shadow-card);
+            padding: 18px 16px;
+            margin-bottom: 14px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .card-header-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* 输入控件 */
+        .name-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .big-input {
+            width: 100%;
+            padding: 13px 40px 13px 14px;
+            font-size: 17px;
+            font-weight: 600;
+            color: #0f172a;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: var(--radius-md);
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .big-input:focus {
+            background: #ffffff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+
+        .btn-clear-name {
+            position: absolute;
+            right: 12px;
+            background: #cbd5e1;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: none;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            outline: none;
+            transition: background 0.2s;
+        }
+
+        .btn-clear-name:active {
+            background: #94a3b8;
+        }
+
+        .content-textarea {
+            width: 100%;
+            height: 78px;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #0f172a;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: var(--radius-md);
+            resize: none;
+            outline: none;
+            transition: all 0.2s;
+            line-height: 1.4;
+        }
+
+        .content-textarea:focus {
+            background: #ffffff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+
+        /* 快捷标签列表 (横向平滑滑动) */
+        .tags-wrapper {
+            margin-top: 8px;
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .tags-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tag-chip {
+            white-space: nowrap;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tag-chip:active {
+            background: var(--primary-light);
+            border-color: #bae6fd;
+            color: var(--primary);
+            transform: scale(0.96);
+        }
+
+        /* 播报模式分段选择器 (Segmented Control) */
+        .segmented-selector {
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 14px;
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .seg-item {
+            flex: 1;
+            padding: 9px 4px;
+            text-align: center;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .seg-item .seg-icon {
+            font-size: 17px;
+            line-height: 1;
+        }
+
+        .seg-item .seg-text {
+            font-size: 12px;
+        }
+
+        .seg-item.active {
+            background: #ffffff;
+            color: #0284c7;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .seg-item.active.mode-chime-active {
+            color: #d97706;
+        }
+
+        .seg-item.active.mode-silent-active {
+            color: #475569;
+        }
+
+        /* 模式动态辅助提示区 */
+        .mode-helper-box {
+            margin-top: 10px;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+
+        .helper-voice {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #15803d;
+        }
+
+        .helper-chime {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #b45309;
+        }
+
+        .helper-silent {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+
+        /* 朗读遍数快捷单选丸 */
+        .repeat-pills {
+            display: flex;
+            gap: 6px;
+        }
+
+        .repeat-pill {
+            background: #ffffff;
+            border: 1.5px solid #bbf7d0;
+            color: #16a34a;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .repeat-pill.active {
+            background: #16a34a;
+            color: #ffffff;
+            border-color: #16a34a;
+        }
+
+        /* 大发送按钮 */
+        .btn-send-main {
+            margin-top: 16px;
+            width: 100%;
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            border: none;
+            padding: 15px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            box-shadow: var(--shadow-btn);
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+        }
+
+        .btn-send-main:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 6px rgba(2, 132, 199, 0.2);
+            filter: brightness(0.95);
+        }
+
+        .btn-send-main:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .send-title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .send-sub {
+            font-size: 11px;
+            color: #e0f2fe;
+            font-weight: 500;
+        }
+
+        /* 近期发送历史 */
+        .history-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .history-card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .history-row {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 12px;
+            transition: all 0.15s;
+        }
+
+        .history-row-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .history-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #0284c7;
+        }
+
+        .history-time {
+            font-size: 11px;
+            color: #94a3b8;
+            font-family: 'Consolas', monospace;
+        }
+
+        .history-msg {
+            font-size: 13px;
+            color: #334155;
+            font-weight: 500;
+            line-height: 1.35;
+        }
+
+        .history-row-bottom {
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .history-badge {
+            font-size: 11px;
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .badge-voice {
+            background: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+
+        .badge-chime {
+            background: #fffbeb;
+            color: #d97706;
+            border: 1px solid #fde68a;
+        }
+
+        .badge-silent {
+            background: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-recall {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0284c7;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-recall:active {
+            background: #e0f2fe;
+            border-color: #bae6fd;
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 20px 0;
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        /* 现代毛玻璃悬浮通知 Toast */
+        .glass-toast {
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(15, 23, 42, 0.90);
+            color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 9999;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 90%;
+            pointer-events: none;
+            transition: transform 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s;
+            opacity: 0;
+        }
+
+        .glass-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部毛玻璃 Toast -->
+    <div id="toast" class="glass-toast">✅ 发送成功</div>
+
+    <!-- 顶部科技蓝导航 -->
+    <div class="top-navbar">
+        <div class="navbar-header">
+            <div class="brand-box">
+                <span class="brand-icon">📢</span>
+                <span class="brand-title">黑板小喇叭</span>
+            </div>
+            <div class="status-badge">
+                <span id="statusDot" class="status-dot"></span>
+                <span id="statusText">云端通道就绪 (4G/5G)</span>
+            </div>
+        </div>
+
+        <!-- 班级与口令精简栏 (点击展开抽屉) -->
+        <div class="channel-bar" onclick="toggleSettingsDrawer()">
+            <div class="channel-info">
+                <span>🏫 目标班级:</span>
+                <span id="roomBadge" class="channel-pill">classroom_703</span>
+                <span id="tokenReadyTag" class="token-tag">🔒 口令已就绪</span>
+            </div>
+            <div class="channel-edit-hint">
+                <span>设置</span>
+                <span id="drawerArrow">▾</span>
+            </div>
+        </div>
+
+        <!-- 班级与口令展开配置抽屉 -->
+        <div id="settingsDrawer" class="settings-drawer">
+            <div class="drawer-title">
+                <span>⚙️ 目标教室与教师口令设置</span>
+                <span style="font-size: 11px; color: #64748b;">修改后自动保存</span>
+            </div>
+            <div class="drawer-fields">
+                <div class="drawer-field">
+                    <label>🏫 目标班级:</label>
+                    <input type="text" id="roomIdInput" class="drawer-input" placeholder="例如 classroom_703" onchange="onSettingsChanged()">
+                </div>
+                <div class="drawer-field">
+                    <label>🔒 教师口令:</label>
+                    <input type="text" id="tokenInput" class="drawer-input" placeholder="默认 123456 (需与电脑一致)" onchange="onSettingsChanged()">
+                </div>
+                <button class="drawer-btn-save" onclick="saveAndCloseDrawer()">✅ 保存并收起设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主表单容器 -->
+    <div class="main-container">
+        <div class="glass-card">
+            <!-- 1. 被叫学生姓名 -->
+            <div style="margin-bottom: 14px;">
+                <div class="card-header-label">
+                    <span>👤 被叫学生姓名</span>
+                    <span style="font-size: 11px; color: #94a3b8;">支持多位学生 (逗号隔开)</span>
+                </div>
+                <div class="name-input-wrapper">
+                    <input type="text" id="studentName" class="big-input" placeholder="输入学生姓名，例如：李明" value="李明" oninput="updatePreviewSubtext()">
+                    <button class="btn-clear-name" onclick="clearStudentName()" title="清空姓名">✕</button>
+                </div>
+            </div>
+
+            <!-- 2. 通知提醒事由 -->
+            <div style="margin-bottom: 14px;">
+                <div class="card-header-label">
+                    <span>💬 通知提醒事由</span>
+                    <span style="font-size: 11px; color: #0284c7; font-weight: 600;">点击下方标签快速填入</span>
+                </div>
+                <textarea id="noticeContent" class="content-textarea" placeholder="输入要播报的事由..." oninput="updatePreviewSubtext()">请到办公室领新学期教材</textarea>
+                
+                <!-- 快捷模板横向平滑滚动条 -->
+                <div class="tags-wrapper">
+                    <div class="tag-chip" onclick="applyPreset('请到办公室领书')">📚 领新教材</div>
+                    <div class="tag-chip" onclick="applyPreset('请到办公室交作业')">📝 交作业/订正</div>
+                    <div class="tag-chip" onclick="applyPreset('班主任在办公室找你')">👩‍🏫 班主任找你</div>
+                    <div class="tag-chip" onclick="applyPreset('上课铃响了，请速回教室')">🏃 速回教室</div>
+                    <div class="tag-chip" onclick="applyPreset('放学后留下来打扫卫生')">🧹 值日提醒</div>
+                    <div class="tag-chip" onclick="applyPreset('请到操场司令台集合')">⚽ 操场集合</div>
+                    <div class="tag-chip" onclick="applyPreset('请速到校医务室')">🏥 校医务室</div>
+                </div>
+            </div>
+
+            <!-- 3. 播报方式分段选择器 (Segmented Control) -->
+            <div style="margin-bottom: 10px;">
+                <div class="card-header-label">
+                    <span>📢 提醒播报方式</span>
+                    <span id="modeCurrentBadge" style="font-size: 12px; color: #0284c7; font-weight: 600;">铃声+朗读</span>
+                </div>
+                <div class="segmented-selector">
+                    <div class="seg-item active" id="seg-voice" onclick="selectMode('voice')">
+                        <span class="seg-icon">🔔🗣️</span>
+                        <span class="seg-text">叮咚+语音</span>
+                    </div>
+                    <div class="seg-item" id="seg-chime" onclick="selectMode('chime_only')">
+                        <span class="seg-icon">🔔✨</span>
+                        <span class="seg-text">仅叮咚铃声</span>
+                    </div>
+                    <div class="seg-item" id="seg-silent" onclick="selectMode('silent')">
+                        <span class="seg-icon">🔕🤫</span>
+                        <span class="seg-text">静音大屏弹窗</span>
+                    </div>
+                </div>
+
+                <!-- 模式动态辅助配置区 -->
+                <div id="modeHelper" class="mode-helper-box helper-voice">
+                    <span id="helperText">🔊 语音朗读遍数：</span>
+                    <div id="repeatPills" class="repeat-pills">
+                        <button class="repeat-pill" id="rp1" onclick="setRepeat(1)">朗读 1 遍</button>
+                        <button class="repeat-pill active" id="rp2" onclick="setRepeat(2)">朗读 2 遍</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 立即发送主操作按钮 -->
+            <button id="sendBtn" class="btn-send-main" onclick="sendMessage()">
+                <span id="sendBtnTitle" class="send-title">📢 立即发送呼叫</span>
+                <span id="sendBtnSub" class="send-sub">目标: classroom_703 · 叮咚+语音播报</span>
+            </button>
+        </div>
+
+        <!-- 5. 近期发送记录 -->
+        <div class="glass-card">
+            <div class="history-card-header">
+                <div class="history-card-title">
+                    <span>🕒 近期发送记录</span>
+                </div>
+                <span style="font-size: 11px; color: #94a3b8;">最多保留最近 5 条</span>
+            </div>
+            <div id="historyList" class="history-list">
+                <div class="history-empty">暂无发送记录，随时发送第一条广播</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        let roomId = urlParams.get('room') || localStorage.getItem('last_room_id') || 'classroom_703';
+        let secretToken = urlParams.get('token') || localStorage.getItem('last_secret_token') || '123456';
+        let selectedMode = localStorage.getItem('last_selected_mode') || 'voice';
+        let repeatCount = parseInt(localStorage.getItem('last_repeat_count')) || 2;
+
+        if (urlParams.get('room')) localStorage.setItem('last_room_id', roomId);
+        if (urlParams.get('token')) localStorage.setItem('last_secret_token', secretToken);
+
+        document.getElementById('roomIdInput').value = roomId;
+        document.getElementById('tokenInput').value = secretToken;
+        document.getElementById('roomBadge').innerText = roomId;
+
+        let myClientId = localStorage.getItem('my_client_id');
+        if (!myClientId) {
+            myClientId = 'teacher_' + Math.random().toString(16).substr(2, 8);
+            localStorage.setItem('my_client_id', myClientId);
+        }
+
+        let mqttClient = null;
+        let isMqttConnected = false;
+        let pendingAckCallback = null;
+        const historyData = [];
+
+        // 抽屉展开/折叠
+        function toggleSettingsDrawer() {
+            const drawer = document.getElementById('settingsDrawer');
+            const arrow = document.getElementById('drawerArrow');
+            const isOpen = drawer.classList.toggle('open');
+            arrow.innerText = isOpen ? '▴' : '▾';
+            triggerHaptic();
+        }
+
+        function saveAndCloseDrawer() {
+            onSettingsChanged();
+            toggleSettingsDrawer();
+        }
+
+        function onSettingsChanged() {
+            const inputRoom = document.getElementById('roomIdInput').value.trim();
+            const inputToken = document.getElementById('tokenInput').value.trim();
+
+            if (inputRoom) {
+                roomId = inputRoom;
+                localStorage.setItem('last_room_id', roomId);
+                document.getElementById('roomBadge').innerText = roomId;
+            }
+            if (inputToken) {
+                secretToken = inputToken;
+                localStorage.setItem('last_secret_token', secretToken);
+            }
+
+            updateTokenTag();
+            updatePreviewSubtext();
+            showToast('已保存班级与口令设置', 'success');
+            initMQTT();
+        }
+
+        function updateTokenTag() {
+            const tag = document.getElementById('tokenReadyTag');
+            if (secretToken) {
+                tag.innerText = '🔒 口令已就绪';
+                tag.style.color = '#e0f2fe';
+            } else {
+                tag.innerText = '⚠️ 未设置口令';
+                tag.style.color = '#fecaca';
+            }
+        }
+        updateTokenTag();
+
+        function clearStudentName() {
+            const input = document.getElementById('studentName');
+            input.value = '';
+            input.focus();
+            updatePreviewSubtext();
+            triggerHaptic();
+        }
+
+        function applyPreset(text) {
+            document.getElementById('noticeContent').value = text;
+            updatePreviewSubtext();
+            showToast('已填入模板事由', 'info');
+            triggerHaptic();
+        }
+
+        function setRepeat(count) {
+            repeatCount = count;
+            localStorage.setItem('last_repeat_count', count);
+            document.getElementById('rp1').classList.toggle('active', count === 1);
+            document.getElementById('rp2').classList.toggle('active', count === 2);
+            updatePreviewSubtext();
+            triggerHaptic();
+        }
+
+        function selectMode(mode) {
+            selectedMode = mode;
+            localStorage.setItem('last_selected_mode', mode);
+
+            const segVoice = document.getElementById('seg-voice');
+            const segChime = document.getElementById('seg-chime');
+            const segSilent = document.getElementById('seg-silent');
+
+            segVoice.className = 'seg-item' + (mode === 'voice' ? ' active' : '');
+            segChime.className = 'seg-item' + (mode === 'chime_only' ? ' active mode-chime-active' : '');
+            segSilent.className = 'seg-item' + (mode === 'silent' ? ' active mode-silent-active' : '');
+
+            const helper = document.getElementById('modeHelper');
+            const helperText = document.getElementById('helperText');
+            const repeatPills = document.getElementById('repeatPills');
+            const modeBadge = document.getElementById('modeCurrentBadge');
+
+            if (mode === 'voice') {
+                modeBadge.innerText = '叮咚+语音朗读';
+                modeBadge.style.color = '#0284c7';
+                helper.className = 'mode-helper-box helper-voice';
+                helperText.innerText = '🔊 语音朗读遍数：';
+                repeatPills.style.display = 'flex';
+            } else if (mode === 'chime_only') {
+                modeBadge.innerText = '仅叮咚提示音';
+                modeBadge.style.color = '#d97706';
+                helper.className = 'mode-helper-box helper-chime';
+                helperText.innerText = '🔔 仅播放清脆提示音并在白板弹窗，不念学生姓名';
+                repeatPills.style.display = 'none';
+            } else {
+                modeBadge.innerText = '静音大屏弹窗';
+                modeBadge.style.color = '#64748b';
+                helper.className = 'mode-helper-box helper-silent';
+                helperText.innerText = '🔕 全程无声，仅在白板屏幕静默弹出置顶卡片';
+                repeatPills.style.display = 'none';
+            }
+
+            updatePreviewSubtext();
+            triggerHaptic();
+        }
+
+        function updatePreviewSubtext() {
+            const student = document.getElementById('studentName').value.trim() || '同学';
+            const sub = document.getElementById('sendBtnSub');
+            let modeDesc = '叮咚+语音(' + repeatCount + '遍)';
+            if (selectedMode === 'chime_only') modeDesc = '仅叮咚提示音';
+            if (selectedMode === 'silent') modeDesc = '静音大屏弹窗';
+
+            sub.innerText = '目标: ' + roomId + ' · ' + student + ' (' + modeDesc + ')';
+        }
+
+        function triggerHaptic() {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(12); } catch(e){}
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            if (type === 'error') {
+                toast.style.background = 'rgba(220, 38, 38, 0.95)';
+            } else if (type === 'warn') {
+                toast.style.background = 'rgba(217, 119, 6, 0.95)';
+            } else if (type === 'info') {
+                toast.style.background = 'rgba(15, 23, 42, 0.90)';
+            } else {
+                toast.style.background = 'rgba(16, 185, 129, 0.95)';
+            }
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function initMQTT() {
+            try {
+                if (mqttClient) {
+                    try { mqttClient.end(true); } catch(e){}
+                }
+                const brokerUrl = 'wss://broker-cn.emqx.io:8084/mqtt';
+                mqttClient = mqtt.connect(brokerUrl, {
+                    clientId: myClientId,
+                    clean: true,
+                    connectTimeout: 5000,
+                    reconnectPeriod: 4000,
+                });
+
+                mqttClient.on('connect', () => {
+                    isMqttConnected = true;
+                    document.getElementById('statusDot').style.background = '#22c55e';
+                    document.getElementById('statusDot').style.boxShadow = '0 0 8px #22c55e';
+                    document.getElementById('statusText').innerText = '云端通道就绪 (4G/5G)';
+                    mqttClient.subscribe('school/resp/' + myClientId, { qos: 1 });
+                });
+
+                mqttClient.on('message', (topic, message) => {
+                    if (topic === 'school/resp/' + myClientId) {
+                        try {
+                            const resp = JSON.parse(message.toString());
+                            if (pendingAckCallback) {
+                                pendingAckCallback(resp);
+                                pendingAckCallback = null;
+                            }
+                        } catch(e) {
+                            console.error('Parse resp error:', e);
+                        }
+                    }
+                });
+
+                mqttClient.on('offline', () => {
+                    isMqttConnected = false;
+                    document.getElementById('statusDot').style.background = '#ef4444';
+                    document.getElementById('statusDot').style.boxShadow = '0 0 8px #ef4444';
+                    document.getElementById('statusText').innerText = '正在重新连接...';
+                });
+            } catch(e) {
+                console.warn('MQTT init error:', e);
+            }
+        }
+
+        window.addEventListener('online', initMQTT);
+
+        async function sendMessage() {
+            const currentRoom = document.getElementById('roomIdInput').value.trim() || roomId;
+            const currentToken = document.getElementById('tokenInput').value.trim() || secretToken;
+            const student = document.getElementById('studentName').value.trim();
+            const content = document.getElementById('noticeContent').value.trim();
+            const repeat = repeatCount;
+
+            if (!currentRoom) {
+                showToast('❌ 请输入目标班级编号！', 'error');
+                toggleSettingsDrawer();
+                return;
+            }
+            if (!currentToken) {
+                showToast('❌ 请输入教师防伪口令！', 'error');
+                toggleSettingsDrawer();
+                return;
+            }
+            if (!student) {
+                showToast('⚠️ 请输入被叫学生姓名！', 'warn');
+                document.getElementById('studentName').focus();
+                return;
+            }
+            if (!content) {
+                showToast('⚠️ 请输入通知提醒事由！', 'warn');
+                document.getElementById('noticeContent').focus();
+                return;
+            }
+
+            const sendBtn = document.getElementById('sendBtn');
+            const sendBtnTitle = document.getElementById('sendBtnTitle');
+            sendBtn.disabled = true;
+            sendBtnTitle.innerHTML = '⏳ 正在发送呼叫...';
+
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const fullTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+            const payload = {
+                client_id: myClientId,
+                room_id: currentRoom,
+                token: currentToken,
+                student: student,
+                content: content,
+                repeat: repeat,
+                mode: selectedMode,
+                timestamp: fullTime
+            };
+
+            triggerHaptic();
+
+            // 云端 MQTT 通道 (Cloudflare Pages 原生接入)
+            if (mqttClient) {
+                let ackDone = false;
+                pendingAckCallback = (ack) => {
+                    ackDone = true;
+                    if (ack.status === 'ok') {
+                        showToast('🎉 ' + ack.msg, 'success');
+                        addHistory(payload);
+                    } else {
+                        showToast('❌ ' + ack.msg, 'error');
+                    }
+                    resetSendButton();
+                };
+
+                const topic = 'school/call/' + currentRoom;
+                try {
+                    mqttClient.publish(topic, JSON.stringify(payload), { qos: 1 });
+                } catch(e) {
+                    console.error('MQTT publish error:', e);
+                }
+
+                setTimeout(() => {
+                    if (!ackDone) {
+                        pendingAckCallback = null;
+                        if (isMqttConnected) {
+                            showToast('📢 消息已发送至云端，等待教室响应', 'info');
+                            addHistory(payload);
+                        } else {
+                            showToast('⚠️ 发送超时，请确认教室电脑黑板小喇叭已联网', 'error');
+                        }
+                        resetSendButton();
+                    }
+                }, 3500);
+            } else {
+                showToast('⚠️ 网络未连接，请刷新重试', 'error');
+                resetSendButton();
+            }
+        }
+
+        function resetSendButton() {
+            const sendBtn = document.getElementById('sendBtn');
+            const sendBtnTitle = document.getElementById('sendBtnTitle');
+            sendBtn.disabled = false;
+            sendBtnTitle.innerHTML = '📢 立即发送呼叫';
+        }
+
+        function addHistory(item) {
+            historyData.unshift(item);
+            if (historyData.length > 5) historyData.pop();
+
+            const list = document.getElementById('historyList');
+            list.innerHTML = historyData.map((h, index) => {
+                let badgeClass = 'badge-voice';
+                let badgeText = '朗读 ' + h.repeat + ' 遍';
+                if (h.mode === 'chime_only') {
+                    badgeClass = 'badge-chime';
+                    badgeText = '仅叮咚';
+                } else if (h.mode === 'silent') {
+                    badgeClass = 'badge-silent';
+                    badgeText = '静音弹窗';
+                }
+
+                return `
+                    <div class="history-row">
+                        <div class="history-row-top">
+                            <span class="history-name">👤 ${h.student} 同学</span>
+                            <span class="history-time">${h.timestamp.split(' ')[1] || h.timestamp}</span>
+                        </div>
+                        <div class="history-msg">${h.content}</div>
+                        <div class="history-row-bottom">
+                            <span class="history-badge ${badgeClass}">${badgeText}</span>
+                            <button class="btn-recall" onclick="reFillHistory(${index})">🔁 填入并重发</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function reFillHistory(index) {
+            const item = historyData[index];
+            if (!item) return;
+            document.getElementById('studentName').value = item.student;
+            document.getElementById('noticeContent').value = item.content;
+            selectMode(item.mode || 'voice');
+            if (item.repeat) setRepeat(item.repeat);
+            updatePreviewSubtext();
+            showToast('已填入该条记录，可直接点发送', 'info');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            triggerHaptic();
+        }
+
+        // 初始化
+        selectMode(selectedMode);
+        setRepeat(repeatCount);
+        updatePreviewSubtext();
+        initMQTT();
+    </script>
+</body>
+</html>
